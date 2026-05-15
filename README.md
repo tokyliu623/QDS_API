@@ -87,3 +87,116 @@ curl -X POST http://localhost:5051/api/vivo-docs/read \
 ```bash
 curl "http://localhost:5051/api/vivo-docs/validate?token=your_token"
 ```
+
+## 服务器部署指南
+
+### 1. 克隆仓库
+
+```bash
+cd /data/qds-api
+git clone https://github.com/tokyliu623/QDS_API.git
+```
+
+### 2. 创建环境变量文件
+
+```bash
+cd QDS_API
+cp .env.example .env
+```
+
+编辑 `.env` 文件：
+
+```bash
+VIVO_AK=your_actual_ak_here
+VIVO_SK=your_actual_sk_here
+DATABASE_URL=file:/app/data/dev.db
+PORT=5051
+CACHE_DIR=/app/data/cache
+CACHE_EXPIRE_DAYS=7
+```
+
+### 3. Docker 部署
+
+```bash
+# 构建镜像
+docker build -t qds-api:latest .
+
+# 创建数据目录
+mkdir -p /data/qds-api/data/cache
+
+# 运行容器
+docker run -d \
+  --name qds-api \
+  --restart always \
+  -p 0.0.0.0:5051:5051 \
+  -v /data/qds-api/data:/app/data \
+  --env-file .env \
+  qds-api:latest
+```
+
+### 4. Nginx 配置
+
+在 `/etc/nginx/conf.d/qds-api.conf` 添加：
+
+```nginx
+server {
+    listen 80;
+    server_name qds-test.vmic.xyz;
+
+    location /api/vivo-docs/ {
+        proxy_pass http://localhost:5051/api/vivo-docs/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/health {
+        proxy_pass http://localhost:5051/api/health;
+    }
+}
+```
+
+### 5. 配置缓存清理定时任务
+
+```bash
+# 编辑 crontab
+crontab -e
+
+# 添加以下行
+0 2 * * * docker exec qds-api npx tsx /app/scripts/cleanup-cache.ts >> /var/log/qds-api-cleanup.log 2>&1
+```
+
+### 6. 验证部署
+
+```bash
+# 检查服务状态
+curl http://localhost:5051/api/health
+
+# 测试 Token 校验
+curl "http://localhost:5051/api/vivo-docs/validate?token=your_token"
+
+# 测试文档读取
+curl -X POST http://localhost:5051/api/vivo-docs/read \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://docs.vivo.xyz/s/xxx", "apiToken": "your_token"}'
+```
+
+## 运维命令
+
+```bash
+# 查看日志
+docker logs -f qds-api
+
+# 重启服务
+docker restart qds-api
+
+# 进入容器
+docker exec -it qds-api sh
+
+# 查看缓存统计
+curl http://localhost:5051/api/health
+
+# 手动清理缓存
+docker exec qds-api npx tsx /app/scripts/cleanup-cache.ts
+```
