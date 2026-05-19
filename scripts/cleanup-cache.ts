@@ -1,6 +1,5 @@
 import { prisma } from '../src/lib/prisma'
 import * as fs from 'fs'
-import * as path from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR || '/app/data/cache'
 
@@ -30,12 +29,12 @@ async function cleanupExpiredCache(): Promise<void> {
         }
         
         await prisma.cacheRecord.delete({
-          where: { id: record.id },
+          where: { urlHash: record.urlHash },
         })
         
         deleted++
       } catch (error) {
-        console.error(`[cleanup] Error deleting record ${record.id}:`, error)
+        console.error(`[cleanup] Error deleting record ${record.urlHash}:`, error)
         errors++
       }
     }

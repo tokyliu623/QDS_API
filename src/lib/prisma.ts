@@ -45,9 +45,14 @@ export const prisma = {
       const db = readDB()
       return db.records.find(r => r.urlHash === where.urlHash) || null
     },
-    findMany: async () => {
+    findMany: async (options?: { where?: { expiresAt?: { lt: Date } } }) => {
       const db = readDB()
-      return db.records
+      let records = db.records
+      if (options?.where?.expiresAt?.lt) {
+        const now = new Date(options.where.expiresAt.lt)
+        records = records.filter(r => new Date(r.expiresAt) < now)
+      }
+      return records
     },
     upsert: async ({ where, update, create }: { where: { urlHash: string }, update: Partial<CacheRecord>, create: CacheRecord }) => {
       const db = readDB()
@@ -75,6 +80,9 @@ export const prisma = {
       db.records = db.records.filter(r => r.urlHash !== where.urlHash)
       writeDB(db)
     },
+  },
+  $disconnect: async () => {
+    // No-op for JSON file DB
   },
 }
 
