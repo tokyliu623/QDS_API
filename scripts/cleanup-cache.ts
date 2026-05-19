@@ -11,7 +11,7 @@ async function cleanupExpiredCache(): Promise<void> {
     const expiredRecords = await prisma.cacheRecord.findMany({
       where: {
         expiresAt: {
-          lt: new Date(),
+          lt: new Date().toISOString(),
         },
       },
     })

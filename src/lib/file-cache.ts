@@ -36,7 +36,7 @@ export async function getCache(url: string): Promise<{
     return { found: false }
   }
 
-  if (new Date() > record.expiresAt) {
+  if (new Date() > new Date(record.expiresAt)) {
     await deleteCacheRecord(urlHash)
     return { found: false }
   }
@@ -48,7 +48,7 @@ export async function getCache(url: string): Promise<{
 
   await prisma.cacheRecord.update({
     where: { urlHash },
-    data: { accessedAt: new Date() },
+    data: { accessedAt: new Date().toISOString() },
   })
 
   const content = fs.readFileSync(record.cachePath)
@@ -92,16 +92,19 @@ export async function setCache(
       fileName,
       fileSize: Buffer.byteLength(JSON.stringify(cacheData)),
       cachePath,
-      expiresAt,
-      accessedAt: new Date(),
+      expiresAt: expiresAt.toISOString(),
+      accessedAt: new Date().toISOString(),
     },
     create: {
+      id: urlHash,
       url,
       urlHash,
       fileName,
       fileSize: Buffer.byteLength(JSON.stringify(cacheData)),
       cachePath,
-      expiresAt,
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      accessedAt: new Date().toISOString(),
     },
   })
 }
@@ -147,7 +150,7 @@ export async function cleanupExpiredCache(): Promise<{
         }
         
         await prisma.cacheRecord.delete({
-          where: { id: record.id },
+          where: { urlHash: record.urlHash },
         })
         
         deleted++
@@ -175,7 +178,7 @@ export async function getCacheStats(): Promise<{
   let totalSize = 0
 
   for (const record of records) {
-    if (record.expiresAt < now) {
+    if (new Date(record.expiresAt) < now) {
       expired++
     }
     totalSize += record.fileSize

@@ -45,7 +45,7 @@ export const prisma = {
       const db = readDB()
       return db.records.find(r => r.urlHash === where.urlHash) || null
     },
-    findMany: async (options?: { where?: { expiresAt?: { lt: Date } } }) => {
+    findMany: async (options?: { where?: { expiresAt?: { lt: string | Date } } }) => {
       const db = readDB()
       let records = db.records
       if (options?.where?.expiresAt?.lt) {
