@@ -1,11 +1,13 @@
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { prisma } from './prisma'
+import { prisma, initDB } from './prisma'
 import type { SheetData } from '@/types'
 
 const CACHE_DIR = process.env.CACHE_DIR || '/app/data/cache'
 const CACHE_EXPIRE_DAYS = parseInt(process.env.CACHE_EXPIRE_DAYS || '7', 10)
+
+initDB()
 
 export function getUrlHash(url: string): string {
   return crypto.createHash('md5').update(url).digest('hex')
