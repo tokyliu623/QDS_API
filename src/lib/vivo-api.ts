@@ -123,12 +123,20 @@ export async function downloadFile(downloadUrl: string): Promise<Buffer> {
 }
 
 export function parseExcelAllSheets(content: Buffer): SheetData[] {
-  const workbook = XLSX.read(content, { type: 'buffer' })
+  const workbook = XLSX.read(content, { 
+    type: 'buffer',
+    cellNF: true,
+    cellDates: true,
+    WTF: true,
+  })
   const sheets: SheetData[] = []
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+    const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
+      defval: '',
+      raw: false,
+    })
     
     if (data.length === 0) {
       continue
