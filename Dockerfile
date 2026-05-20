@@ -13,10 +13,6 @@ RUN npm run build
 # Stage 2: Runner
 FROM node:20-alpine AS runner
 
-# 安装 Python 和 openpyxl (用于 Excel 中文解析)
-RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --no-cache-dir openpyxl --break-system-packages
-
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs

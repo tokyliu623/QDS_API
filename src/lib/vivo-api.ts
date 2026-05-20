@@ -1,9 +1,6 @@
 import * as crypto from 'crypto'
-import { spawn } from 'child_process'
-import * as path from 'path'
-import type { VivoDocumentDetail, VivoApiResponse, SheetData } from '@/types'
+import type { VivoDocumentDetail, VivoApiResponse } from '@/types'
 
-// Load environment variables
 import { config } from 'dotenv'
 config()
 
@@ -121,83 +118,4 @@ export async function downloadFile(downloadUrl: string): Promise<Buffer> {
   }
   const arrayBuffer = await response.arrayBuffer()
   return Buffer.from(arrayBuffer)
-}
-
-export async function parseExcelAllSheets(content: Buffer): Promise<SheetData[]> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(process.cwd(), 'scripts', 'parse_excel.py')
-    const python = spawn('python3', [scriptPath])
-
-    let stdout = ''
-    let stderr = ''
-
-    python.stdout.on('data', (data) => { stdout += data.toString() })
-    python.stderr.on('data', (data) => { stderr += data.toString() })
-
-    python.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Python script failed: ${stderr}`))
-        return
-      }
-      try {
-        const sheets = JSON.parse(stdout) as SheetData[]
-        resolve(sheets)
-      } catch (e) {
-        reject(new Error(`Failed to parse Python output: ${e}`))
-      }
-    })
-
-    python.on('error', (err) => {
-      reject(new Error(`Failed to spawn Python: ${err.message}`))
-    })
-
-    python.stdin.write(content)
-    python.stdin.end()
-  })
-}
-
-export function parseCsv(content: Buffer): SheetData {
-  const text = content.toString('utf-8')
-  const lines = text.split('\n').filter(line => line.trim())
-  
-  if (lines.length === 0) {
-    return { sheetName: 'Sheet1', fields: [], data: [], rowCount: 0 }
-  }
-
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-  const data: Record<string, unknown>[] = []
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-    const row: Record<string, unknown> = {}
-    headers.forEach((header, idx) => {
-      row[header] = values[idx] || ''
-    })
-    data.push(row)
-  }
-
-  return {
-    sheetName: 'Sheet1',
-    fields: headers,
-    data,
-    rowCount: data.length,
-  }
-}
-
-export function parseJson(content: Buffer): SheetData {
-  const jsonData = JSON.parse(content.toString('utf-8'))
-  const data = Array.isArray(jsonData) ? jsonData : [jsonData]
-  
-  if (data.length === 0) {
-    return { sheetName: 'Sheet1', fields: [], data: [], rowCount: 0 }
-  }
-
-  const fields = Object.keys(data[0])
-
-  return {
-    sheetName: 'Sheet1',
-    fields,
-    data,
-    rowCount: data.length,
-  }
 }

@@ -3,9 +3,6 @@ import {
   isVivoDocsUrl,
   getDocumentDownloadUrl,
   downloadFile,
-  parseExcelAllSheets,
-  parseCsv,
-  parseJson,
 } from '@/lib/vivo-api'
 import { getCache, setCache } from '@/lib/file-cache'
 import { getFriendlyError, getErrorCode } from '@/lib/error-messages'
@@ -15,7 +12,7 @@ const UNSUPPORTED_FORMATS = ['.docx', '.doc', '.pdf', '.txt']
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { url, apiToken } = body
+    const { url, apiToken, raw } = body
 
     if (!url) {
       return NextResponse.json({
@@ -39,19 +36,6 @@ export async function POST(request: NextRequest) {
         error: '链接格式不正确，请提供 docs.vivo.xyz 或 docs.vmic.xyz 的文档链接',
         errorCode: 'INVALID_URL',
       }, { status: 400 })
-    }
-
-    const cached = await getCache(url)
-    if (cached.found && cached.data) {
-      return NextResponse.json({
-        success: true,
-        fileName: cached.fileName,
-        sheets: cached.data,
-        sheetCount: cached.sheetCount,
-        nonEmptySheetCount: cached.nonEmptySheetCount,
-        source: 'vivo_doc',
-        cached: true,
-      })
     }
 
     const docDetail = await getDocumentDownloadUrl(url, apiToken)
@@ -79,16 +63,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    let sheets = []
     const fileType = fileName.split('.').pop() || ''
-
-    if (fileType === 'xlsx' || fileType === 'xls') {
-      sheets = await parseExcelAllSheets(fileContent)
-    } else if (fileType === 'csv') {
-      sheets = [parseCsv(fileContent)]
-    } else if (fileType === 'json') {
-      sheets = [parseJson(fileContent)]
-    } else {
+    if (!['xlsx', 'xls', 'csv', 'json'].includes(fileType)) {
       return NextResponse.json({
         success: false,
         error: getFriendlyError(`Unsupported file format: .${fileType}`),
@@ -96,25 +72,34 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    if (sheets.length === 0) {
+    if (raw === true) {
       return NextResponse.json({
-        success: false,
-        error: getFriendlyError('No data found'),
-        errorCode: 'EMPTY_DOCUMENT',
-      }, { status: 400 })
+        success: true,
+        fileName: docDetail.baseFileName,
+        fileType,
+        data: fileContent.toString('base64'),
+        source: 'vivo_doc',
+      })
     }
 
-    await setCache(url, docDetail.baseFileName, sheets)
+    const cached = await getCache(url)
+    if (cached.found && cached.data) {
+      return NextResponse.json({
+        success: true,
+        fileName: cached.fileName,
+        sheets: cached.data,
+        sheetCount: cached.sheetCount,
+        nonEmptySheetCount: cached.nonEmptySheetCount,
+        source: 'vivo_doc',
+        cached: true,
+      })
+    }
 
     return NextResponse.json({
-      success: true,
-      fileName: docDetail.baseFileName,
-      sheets,
-      sheetCount: sheets.length,
-      nonEmptySheetCount: sheets.length,
-      source: 'vivo_doc',
-      cached: false,
-    })
+      success: false,
+      error: '请使用 raw=true 参数获取原始文件，由客户端解析',
+      errorCode: 'USE_RAW_MODE',
+    }, { status: 400 })
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : '读取文档失败'
