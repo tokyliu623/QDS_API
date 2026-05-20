@@ -1,5 +1,6 @@
 import * as crypto from 'crypto'
-import * as XLSX from 'xlsx'
+import { spawn } from 'child_process'
+import * as path from 'path'
 import type { VivoDocumentDetail, VivoApiResponse, SheetData } from '@/types'
 
 // Load environment variables
@@ -122,65 +123,37 @@ export async function downloadFile(downloadUrl: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer)
 }
 
-export function parseExcelAllSheets(content: Buffer): SheetData[] {
-  const workbook = XLSX.read(content, { 
-    type: 'buffer',
-    cellNF: true,
-    cellDates: true,
-    WTF: false,
+export async function parseExcelAllSheets(content: Buffer): Promise<SheetData[]> {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(process.cwd(), 'scripts', 'parse_excel.py')
+    const python = spawn('python3', [scriptPath])
+
+    let stdout = ''
+    let stderr = ''
+
+    python.stdout.on('data', (data) => { stdout += data.toString() })
+    python.stderr.on('data', (data) => { stderr += data.toString() })
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Python script failed: ${stderr}`))
+        return
+      }
+      try {
+        const sheets = JSON.parse(stdout) as SheetData[]
+        resolve(sheets)
+      } catch (e) {
+        reject(new Error(`Failed to parse Python output: ${e}`))
+      }
+    })
+
+    python.on('error', (err) => {
+      reject(new Error(`Failed to spawn Python: ${err.message}`))
+    })
+
+    python.stdin.write(content)
+    python.stdin.end()
   })
-  const sheets: SheetData[] = []
-
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
-      defval: '',
-      raw: true,
-      header: 1,
-    })
-    
-    if (data.length === 0) {
-      continue
-    }
-
-    const headers = data[0] as unknown as unknown[]
-    const fields = headers.map((h, idx) => {
-      if (h === undefined || h === null || h === '') {
-        return `column_${idx}`
-      }
-      return String(h)
-    })
-    
-    const rows: Record<string, unknown>[] = []
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i] as unknown as unknown[]
-      const rowObj: Record<string, unknown> = {}
-      let hasValue = false
-      for (let j = 0; j < fields.length; j++) {
-        const val = row[j]
-        if (val !== undefined && val !== null && val !== '') {
-          hasValue = true
-        }
-        rowObj[fields[j]] = val ?? ''
-      }
-      if (hasValue) {
-        rows.push(rowObj)
-      }
-    }
-    
-    if (rows.length === 0) {
-      continue
-    }
-    
-    sheets.push({
-      sheetName,
-      fields,
-      data: rows,
-      rowCount: rows.length,
-    })
-  }
-
-  return sheets
 }
 
 export function parseCsv(content: Buffer): SheetData {

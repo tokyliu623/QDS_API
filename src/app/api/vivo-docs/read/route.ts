@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     const fileType = fileName.split('.').pop() || ''
 
     if (fileType === 'xlsx' || fileType === 'xls') {
-      sheets = parseExcelAllSheets(fileContent)
+      sheets = await parseExcelAllSheets(fileContent)
     } else if (fileType === 'csv') {
       sheets = [parseCsv(fileContent)]
     } else if (fileType === 'json') {
