@@ -127,7 +127,7 @@ export function parseExcelAllSheets(content: Buffer): SheetData[] {
     type: 'buffer',
     cellNF: true,
     cellDates: true,
-    WTF: true,
+    WTF: false,
   })
   const sheets: SheetData[] = []
 
@@ -135,20 +135,48 @@ export function parseExcelAllSheets(content: Buffer): SheetData[] {
     const sheet = workbook.Sheets[sheetName]
     const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { 
       defval: '',
-      raw: false,
+      raw: true,
+      header: 1,
     })
     
     if (data.length === 0) {
       continue
     }
 
-    const fields = Object.keys(data[0])
+    const headers = data[0] as unknown as unknown[]
+    const fields = headers.map((h, idx) => {
+      if (h === undefined || h === null || h === '') {
+        return `column_${idx}`
+      }
+      return String(h)
+    })
+    
+    const rows: Record<string, unknown>[] = []
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i] as unknown as unknown[]
+      const rowObj: Record<string, unknown> = {}
+      let hasValue = false
+      for (let j = 0; j < fields.length; j++) {
+        const val = row[j]
+        if (val !== undefined && val !== null && val !== '') {
+          hasValue = true
+        }
+        rowObj[fields[j]] = val ?? ''
+      }
+      if (hasValue) {
+        rows.push(rowObj)
+      }
+    }
+    
+    if (rows.length === 0) {
+      continue
+    }
     
     sheets.push({
       sheetName,
       fields,
-      data,
-      rowCount: data.length,
+      data: rows,
+      rowCount: rows.length,
     })
   }
 
